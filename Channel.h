@@ -55,6 +55,7 @@ public:
         events_ |= KReadEvent;
         update();
     }
+    
     void disableReading()
     {
         events_ &= ~KReadEvent;
