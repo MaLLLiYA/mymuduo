@@ -29,13 +29,50 @@ EPollPoller::~EPollPoller()
 }
 
 // 重写Poller虚函数
-TimeStamp EPollPoller::poll(int timeoutMs, ChannelList *activeChannels) {}
+TimeStamp EPollPoller::poll(int timeoutMs, ChannelList *activeChannels)
+{
+    LOG_INFO("fd total count %lu\n", channels_.size());
+
+    int numEvents = ::epoll_wait(epollfd_,
+                                 &*events_.begin(),
+                                 static_cast<int>(events_.size()),
+                                 timeoutMs);
+    // int savedError = errno;
+    TimeStamp now(TimeStamp::now());
+
+    if (numEvents > 0)
+    {
+        LOG_INFO("%d events happened\n", numEvents);
+
+        fillActiveChannels(numEvents, activeChannels);
+
+        // 数组扩容
+        if (events_.size() == numEvents)
+        {
+            events_.resize(events_.size() * 2);
+        }
+    }
+    else if (numEvents == 0)
+    {
+        LOG_DEBUG("nothing happened\n");
+    }
+    else
+    {
+        if (errno != EINTR)
+        {
+            // errno = savedError;
+            LOG_ERROR("EPollPoller::poll() error\n");
+        }
+    }
+    return now;
+}
 
 // Channel::update->EventLoop::updateChannel(virtual)->Poller::updateChannel
 // 根据index判断如何更新
 void EPollPoller::updateChannel(Channel *channel)
 {
     int index = channel->index();
+    LOG_INFO("function:%s => fd=%d events=%d index=%d\n", __FUNCTION__, channel->fd(), channel->events(), index);
     if (index == kNew || index == kDeleted)
     {
         int fd = channel->fd();
@@ -68,9 +105,29 @@ void EPollPoller::updateChannel(Channel *channel)
     }
 }
 
-void EPollPoller::removeChannel(Channel *channel) {}
+void EPollPoller::removeChannel(Channel *channel)
+{
+    int fd = channel->fd();
+    int index = channel->index();
+    channels_.erase(fd);
+    LOG_INFO("function:%s => fd=%d\n", __FUNCTION__, channel->fd());
+    if (index == kAdded)
+    {
+        update(EPOLL_CTL_DEL, channel);
+    }
+    channel->set_index(kNew);
+}
 
-void EPollPoller::fillActiveChannels(int numEvents, ChannelList *activeChannels) const {}
+// 填写活跃的连接 std::vector<Channel *>
+void EPollPoller::fillActiveChannels(int numEvents, ChannelList *activeChannels) const
+{
+    for (int i = 0; i < numEvents; ++i)
+    {
+        Channel *channel = static_cast<Channel *>(events_[i].data.ptr); // std::vector<epoll_event>
+        channel->set_revents(events_[i].events);
+        activeChannels->push_back(channel);
+    }
+}
 
 // 更新channel epoll_ctl add/mod/del
 void EPollPoller::update(int operation, Channel *channel)
