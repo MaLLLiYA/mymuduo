@@ -9,6 +9,9 @@
 class InetAddress;
 class EventLoop;
 
+
+//用于 baseLoop 中，对 listen fd 及其相关方法进行封装
+//监听新连接到达、接受新连接、分发连接给 subLoop 
 class Acceptor : noncopyable
 {
 public:

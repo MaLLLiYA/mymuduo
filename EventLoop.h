@@ -54,7 +54,7 @@ private:
     const pid_t threadId_;
 
     TimeStamp pollReturnTime_;
-    std::shared_ptr<Poller> poller_;
+    std::shared_ptr<Poller> poller_;    // TODO:std::unique_ptr
 
     int wakeupFd_; // 轮询选择一个subloop，并唤醒
     std::unique_ptr<Channel> wakeupChannel_;    // 监听一个wakeupChannel，用于被MainLoop唤醒
